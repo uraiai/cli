@@ -137,14 +137,12 @@ jobs:
           openssl pkcs12 -in $CERTIFICATE_PATH \
             -clcerts -nokeys \
             -out $CERT_PATH \
-            -passin pass:"$APPLE_CERTIFICATE_PASSWORD" \
-            -passout pass:
+            -passin pass:"$APPLE_CERTIFICATE_PASSWORD"
 
           openssl pkcs12 -in $CERTIFICATE_PATH \
-            -nocerts \
+            -nocerts -nodes \
             -out $KEY_PATH \
-            -passin pass:"$APPLE_CERTIFICATE_PASSWORD" \
-            -passout pass:
+            -passin pass:"$APPLE_CERTIFICATE_PASSWORD"
 
           # Import certificate and key separately (no password needed now)
           security import $CERT_PATH -k $KEYCHAIN_PATH -T /usr/bin/codesign -T /usr/bin/security
