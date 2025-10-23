@@ -160,7 +160,16 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          codesign --force --sign "Developer ID Application: $APPLE_TEAM_ID" \
+          # List available identities for debugging
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning
+
+          # Find the Developer ID Application certificate
+          IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | grep -o '".*"' | tr -d '"')
+          echo "Using identity: $IDENTITY"
+
+          # Sign the binary
+          codesign --force --sign "$IDENTITY" \
             --options runtime \
             --timestamp \
             urai-macos-${{ matrix.arch }}
