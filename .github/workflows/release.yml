@@ -129,8 +129,30 @@ jobs:
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificate to keychain
-          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          # Extract cert and key using openssl (more reliable than security's P12 import)
+          CERT_PATH=$RUNNER_TEMP/cert.pem
+          KEY_PATH=$RUNNER_TEMP/key.pem
+
+          echo "Extracting certificate and key with openssl..."
+          openssl pkcs12 -in $CERTIFICATE_PATH \
+            -clcerts -nokeys \
+            -out $CERT_PATH \
+            -passin pass:"$APPLE_CERTIFICATE_PASSWORD" \
+            -passout pass:
+
+          openssl pkcs12 -in $CERTIFICATE_PATH \
+            -nocerts \
+            -out $KEY_PATH \
+            -passin pass:"$APPLE_CERTIFICATE_PASSWORD" \
+            -passout pass:
+
+          # Import certificate and key separately (no password needed now)
+          security import $CERT_PATH -k $KEYCHAIN_PATH -T /usr/bin/codesign -T /usr/bin/security
+          security import $KEY_PATH -k $KEYCHAIN_PATH -T /usr/bin/codesign -T /usr/bin/security
+
+          # Clean up temporary files
+          rm -f $CERT_PATH $KEY_PATH
+
           security list-keychain -d user -s $KEYCHAIN_PATH
 
           # Enable codesigning from a non user interactive shell
