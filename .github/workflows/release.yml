@@ -1,0 +1,229 @@
+name: Release Urai CLI
+
+# This allows you to run this workflow manually from the Actions tab
+on:
+  workflow_dispatch:
+    # Adds an input field to the manual trigger form
+    inputs:
+      private_repo_tag:
+        description: 'The git tag to check out from the private repo (e.g., v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-20.04  # Use 20.04 for OpenSSL 1.1 compatibility
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Public Repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Private Repo
+        uses: actions/checkout@v4
+        with:
+          repository: uraiai/urai-backend
+          path: urai-backend
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ github.event.inputs.private_repo_tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: urai-backend
+          cache-on-failure: true
+
+      - name: Build Linux Binary
+        run: |
+          cd urai-backend/urai-cli
+          cargo build --release
+          strip ../target/release/urai
+          cp ../target/release/urai ../../urai-linux-x86_64
+        env:
+          # Link as much as possible statically, but V8 requires glibc
+          RUSTFLAGS: '-C target-feature=+crt-static'
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-linux-x86_64
+          path: urai-linux-x86_64
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-13  # Intel runner
+            arch: x86_64
+          - target: aarch64-apple-darwin
+            os: macos-14  # M1 runner
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Public Repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Private Repo
+        uses: actions/checkout@v4
+        with:
+          repository: uraiai/urai-backend
+          path: urai-backend
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ github.event.inputs.private_repo_tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: urai-backend
+          cache-on-failure: true
+          key: ${{ matrix.target }}
+
+      - name: Build macOS Binary
+        run: |
+          cd urai-backend/urai-cli
+          cargo build --release --target ${{ matrix.target }}
+          strip ../target/${{ matrix.target }}/release/urai
+          cp ../target/${{ matrix.target }}/release/urai ../../urai-macos-${{ matrix.arch }}
+
+      - name: Import Code Signing Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create variables
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Import certificate from secrets
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate to keychain
+          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Enable codesigning from a non user interactive shell
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+      - name: Code Sign Binary
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --force --sign "Developer ID Application: $APPLE_TEAM_ID" \
+            --options runtime \
+            --timestamp \
+            urai-macos-${{ matrix.arch }}
+
+          # Verify the signature
+          codesign --verify --verbose urai-macos-${{ matrix.arch }}
+          codesign --display --verbose=4 urai-macos-${{ matrix.arch }}
+
+      - name: Create ZIP for Notarization
+        run: |
+          ditto -c -k --keepParent urai-macos-${{ matrix.arch }} urai-macos-${{ matrix.arch }}.zip
+
+      - name: Notarize Binary
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Submit for notarization
+          xcrun notarytool submit urai-macos-${{ matrix.arch }}.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # Check notarization status (optional, for debugging)
+          xcrun notarytool info \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            $(xcrun notarytool history --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$APPLE_TEAM_ID" | head -2 | tail -1 | awk '{print $4}')
+
+      - name: Staple Notarization
+        run: |
+          # Extract the notarized binary
+          unzip -o urai-macos-${{ matrix.arch }}.zip
+
+          # Staple the notarization ticket
+          xcrun stapler staple urai-macos-${{ matrix.arch }}
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-macos-${{ matrix.arch }}
+          path: urai-macos-${{ matrix.arch }}
+
+  create-release:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List Downloaded Files
+        run: |
+          ls -laR artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.private_repo_tag }}
+          name: Release ${{ github.event.inputs.private_repo_tag }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/urai-linux-x86_64/urai-linux-x86_64
+            artifacts/urai-macos-x86_64/urai-macos-x86_64
+            artifacts/urai-macos-arm64/urai-macos-arm64
+          body: |
+            ## Urai CLI ${{ github.event.inputs.private_repo_tag }}
+
+            ### Installation
+
+            #### Linux (x86_64)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.private_repo_tag }}/urai-linux-x86_64 -o urai
+            chmod +x urai
+            sudo mv urai /usr/local/bin/
+            ```
+
+            #### macOS (Intel)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.private_repo_tag }}/urai-macos-x86_64 -o urai
+            chmod +x urai
+            sudo mv urai /usr/local/bin/
+            ```
+
+            #### macOS (Apple Silicon)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.private_repo_tag }}/urai-macos-arm64 -o urai
+            chmod +x urai
+            sudo mv urai /usr/local/bin/
+            ```
