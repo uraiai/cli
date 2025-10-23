@@ -112,6 +112,18 @@ jobs:
           # Import certificate from secrets (use -D for macOS, redirect to file)
           echo "$APPLE_CERTIFICATE" | base64 -D > $CERTIFICATE_PATH
 
+          # Verify the P12 file was decoded correctly and password works
+          echo "Verifying P12 file with openssl..."
+          if openssl pkcs12 -info -in $CERTIFICATE_PATH -noout -passin pass:"$APPLE_CERTIFICATE_PASSWORD" 2>&1; then
+            echo "✅ P12 file verification successful"
+            echo "Certificate details:"
+            openssl pkcs12 -in $CERTIFICATE_PATH -nokeys -clcerts -passin pass:"$APPLE_CERTIFICATE_PASSWORD" | \
+              openssl x509 -noout -subject -issuer -dates
+          else
+            echo "❌ P12 file verification failed - check password and base64 encoding"
+            exit 1
+          fi
+
           # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
