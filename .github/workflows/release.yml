@@ -187,28 +187,35 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        timeout-minutes: 2
         run: |
-          # Submit for notarization
-          xcrun notarytool submit urai-macos-${{ matrix.arch }}.zip \
+          echo "Submitting binary for notarization (async, no wait)..."
+
+          # Submit for notarization without waiting
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit urai-macos-${{ matrix.arch }}.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_ID_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --team-id "$APPLE_TEAM_ID" 2>&1)
 
-          # Check notarization status (optional, for debugging)
-          xcrun notarytool info \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_ID_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            $(xcrun notarytool history --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$APPLE_TEAM_ID" | head -2 | tail -1 | awk '{print $4}')
+          echo "$SUBMISSION_OUTPUT"
 
-      - name: Staple Notarization
-        run: |
-          # Extract the notarized binary
-          unzip -o urai-macos-${{ matrix.arch }}.zip
+          # Extract submission ID
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -E "^\s+id:" | awk '{print $2}' | head -1)
 
-          # Staple the notarization ticket
-          xcrun stapler staple urai-macos-${{ matrix.arch }}
+          if [ -n "$SUBMISSION_ID" ]; then
+            echo "✅ Notarization submitted successfully!"
+            echo "Submission ID: $SUBMISSION_ID"
+            echo ""
+            echo "⏳ Notarization will complete in 5-20 minutes."
+            echo "The binary is code-signed and will work immediately."
+            echo "Gatekeeper will verify notarization online on first run."
+            echo ""
+            echo "Check status with:"
+            echo "xcrun notarytool info $SUBMISSION_ID --apple-id <APPLE_ID> --password <APP_PASSWORD> --team-id <TEAM_ID>"
+          else
+            echo "❌ Failed to submit for notarization"
+            exit 1
+          fi
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4

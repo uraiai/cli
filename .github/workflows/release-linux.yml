@@ -1,0 +1,124 @@
+name: Release Urai CLI (Linux Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      private_repo_tag:
+        description: 'The git tag to check out from the private repo (e.g., v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  build-linux:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-20.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Public Repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Private Repo
+        uses: actions/checkout@v4
+        with:
+          repository: uraiai/urai-backend
+          path: urai-backend
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          ref: ${{ github.event.inputs.private_repo_tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: urai-backend
+          cache-on-failure: true
+          key: ${{ matrix.arch }}
+
+      - name: Build Linux Binary
+        run: |
+          cd urai-backend/urai-cli
+          cargo build --release
+          strip ../target/release/urai
+          cp ../target/release/urai ../../urai-linux-${{ matrix.arch }}
+        env:
+          RUSTFLAGS: '-C target-feature=+crt-static'
+
+      - name: Verify Binary
+        run: |
+          file urai-linux-${{ matrix.arch }}
+          ls -lh urai-linux-${{ matrix.arch }}
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-linux-${{ matrix.arch }}
+          path: urai-linux-${{ matrix.arch }}
+
+  create-release:
+    needs: [build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List Downloaded Files
+        run: |
+          ls -laR artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.private_repo_tag }}
+          name: Release ${{ github.event.inputs.private_repo_tag }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/urai-linux-x86_64/urai-linux-x86_64
+            artifacts/urai-linux-aarch64/urai-linux-aarch64
+          body: |
+            ## Urai CLI ${{ github.event.inputs.private_repo_tag }}
+
+            ### Installation
+
+            #### Linux (x86_64)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.private_repo_tag }}/urai-linux-x86_64 -o urai
+            chmod +x urai
+            sudo mv urai /usr/local/bin/
+            ```
+
+            #### Linux (ARM64/aarch64)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.private_repo_tag }}/urai-linux-aarch64 -o urai
+            chmod +x urai
+            sudo mv urai /usr/local/bin/
+            ```
+
+            ### System Requirements
+
+            - **glibc 2.17+** (CentOS 7+, Ubuntu 14.04+, Debian 8+)
+            - **OpenSSL 1.1+**
+
+            ### Architecture Support
+
+            - **x86_64**: Intel/AMD 64-bit processors
+            - **aarch64**: ARM 64-bit processors (Raspberry Pi 4+, AWS Graviton, Apple Silicon with Rosetta, etc.)
+
+            ---
+
+            _Note: macOS binaries coming soon. For now, macOS users with Apple Silicon can use the ARM64 Linux binary with Rosetta or build from source._
