@@ -434,8 +434,6 @@ cd my-calendar-tool
 
 # 2. Write your tool implementation (tool.ts)
 cat > tool.ts << 'EOF'
-import { ToolRegistry, tool, meta } from "@urai/runtime";
-
 ToolRegistry.addDeclarations([
   {
     "name": "book_slot",
@@ -579,8 +577,6 @@ urai secret --help
 
 ```typescript
 // math.ts
-import { ToolRegistry, tool } from "@urai/runtime";
-
 ToolRegistry.addDeclarations([
   {
     name: "add",
