@@ -50,8 +50,6 @@ jobs:
           cargo build --release
           strip ../target/release/urai
           cp ../target/release/urai ../../urai-linux-${{ matrix.arch }}
-        env:
-          RUSTFLAGS: '-C target-feature=+crt-static'
 
       - name: Verify Binary
         run: |
