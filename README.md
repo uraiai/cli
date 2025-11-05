@@ -2,6 +2,66 @@
 
 A unified command-line tool for building, testing, and deploying TypeScript tools for Urai Voice.
 
+## Installation
+
+### Using Pre-built Binaries
+
+#### Linux (x86_64)
+```bash
+curl -L https://github.com/uraiai/cli/releases/latest/download/urai-linux-x86_64 -o urai
+chmod +x urai
+sudo mv urai /usr/local/bin/
+```
+
+#### Linux (ARM64/aarch64)
+```bash
+curl -L https://github.com/uraiai/cli/releases/latest/download/urai-linux-aarch64 -o urai
+chmod +x urai
+sudo mv urai /usr/local/bin/
+```
+
+#### Using Docker (All Platforms including macOS)
+
+For macOS users or anyone preferring containerized environments, use our Docker images hosted on GitHub Container Registry:
+
+```bash
+# Pull the image (automatically selects the right architecture)
+docker pull ghcr.io/uraiai/cli:latest
+
+# Run interactively
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/uraiai/cli:latest urai --help
+
+# Create an alias for convenience
+alias urai='docker run -it --rm -v $(pwd):/workspace -w /workspace ghcr.io/uraiai/cli:latest urai'
+
+# Now use it like a native command
+urai js list-tools ./my-tools/tidycal.ts
+```
+
+The Docker image is based on Debian 13 and includes all necessary dependencies. It's perfect for:
+- **macOS users** (Apple Silicon and Intel)
+- **Development environments**
+- **CI/CD pipelines**
+- **Consistent cross-platform execution**
+
+### Building from Source
+
+Build the CLI from the workspace root:
+
+```bash
+cargo build --release -p urai-cli
+```
+
+The binary will be available at `target/release/urai`.
+
+Optionally, install it globally:
+
+```bash
+cargo install --path urai-cli
+```
 
 ## Configuration
 
@@ -10,11 +70,19 @@ The CLI supports configuration through multiple sources (in order of priority):
 1. **Command-line arguments** (highest priority)
 2. **Environment variables**
 3. **Local config file** (`.urai.toml` in current directory)
-4. **Global config file** (`~/.urai/config.toml`)
+4. **Global config file** (`~/.config/urai/config.toml`)
+
+Configuration can be organized into profiles. The active profile can be selected by setting the `URAI_PROFILE` environment variable. If not set, it defaults to `default`.
 
 ### Environment Variables
 
+You can override any configuration setting using environment variables.
+
 ```bash
+# Select a configuration profile (defaults to "default")
+export URAI_PROFILE="staging"
+
+# Override settings for the selected profile
 export URAI_API_URL="https://your-urai-server.com"
 export URAI_API_KEY="your-api-key-here"
 export URAI_ORG_ID="your-organization-id"
@@ -22,13 +90,23 @@ export URAI_ORG_ID="your-organization-id"
 
 ### Config File Format
 
-Create `.urai.toml` or `~/.urai/config.toml`:
+Create `.urai.toml` (local) or `~/.config/urai/config.toml` (global) with one or more profiles.
 
 ```toml
-api_url = "https://your-urai-server.com"
-api_key = "your-api-key-here"
-org_id = "your-organization-id"
+# Default profile, used if URAI_PROFILE is not set
+[profile.default]
+api_url = "https://api.urai.io"
+api_key = "key_for_default_profile"
+org_id = "org_default"
+
+# Staging profile, activated with `export URAI_PROFILE=staging`
+[profile.staging]
+api_url = "https://staging.api.urai.io"
+api_key = "key_for_staging_profile"
+org_id = "org_staging"
 ```
+
+The CLI will also read configuration from the old format (without profiles) and treat it as the `default` profile for backward compatibility.
 
 ## Usage
 
@@ -99,6 +177,30 @@ This extracts the tool declarations from your TypeScript file and saves them to 
 - `-o, --output <FILE>` - Output file path (default: schema.json)
 - `-d, --work-dir <DIR>` - Working directory
 - All secret/variable options supported
+
+#### Generate Declarations
+
+Automatically generate TypeScript declarations from your tool source file using tree-sitter. This eliminates the need to manually write and maintain declaration files separately from your JSDoc comments.
+
+```bash
+urai js generate-declarations <tool-file.ts> -o <declarations.ts>
+```
+
+**Example:**
+```bash
+urai js generate-declarations ./my-tools/tidycal_tool.ts -o ./my-tools/declarations.ts
+```
+
+This command parses your TypeScript source file and:
+- Extracts interfaces with their JSDoc comments
+- Finds methods decorated with `@tool`
+- Generates properly formatted `FunctionDeclaration` objects
+- Maps TypeScript types to JSON Schema types
+- Handles optional vs required parameters correctly
+
+
+**Options:**
+- `-o, --output <FILE>` - Output file path (default: declarations.ts)
 
 #### Run a Local Server
 
@@ -432,32 +534,35 @@ Here's a typical workflow for creating and deploying a new tool:
 mkdir my-calendar-tool
 cd my-calendar-tool
 
-# 2. Write your tool implementation (tool.ts)
+# 2. Write your tool implementation (tool.ts) with JSDoc
 cat > tool.ts << 'EOF'
-ToolRegistry.addDeclarations([
-  {
-    "name": "book_slot",
-    "description": "Books a calendar slot",
-    "parameters": {
-      "schema_type": "Object",
-      "properties": {
-        "date": { "schema_type": "string", "description": "Date in YYYY-MM-DD format" },
-        "time": { "schema_type": "string", "description": "Time in HH:MM format" }
-      },
-      "required": ["date", "time"]
-    }
-  }
-]);
+import "./declarations.ts";
+
+/**
+ * Booking request parameters
+ */
+interface BookingRequest {
+  /** Date in YYYY-MM-DD format */
+  date: string;
+  /** Time in HH:MM format */
+  time: string;
+}
 
 class CalendarTool {
+  /**
+   * Books a calendar slot
+   */
   @tool
-  static async book_slot({ date, time }: { date: string; time: string }) {
+  static async book_slot({ date, time }: BookingRequest) {
     const apiKey = meta.secrets.CALENDAR_API_KEY;
     // Implementation...
     return { success: true, booking_id: "123" };
   }
 }
 EOF
+
+# 2a. Auto-generate declarations from JSDoc
+urai js generate-declarations tool.ts -o declarations.ts
 
 # 3. Test locally
 urai js list-tools tool.ts
@@ -565,6 +670,8 @@ Get help for any command:
 urai --help
 urai js --help
 urai js call --help
+urai js generate-schema --help
+urai js generate-declarations --help
 urai tool --help
 urai tool create --help
 urai agent --help
@@ -577,6 +684,8 @@ urai secret --help
 
 ```typescript
 // math.ts
+import { ToolRegistry, tool } from "@urai/runtime";
+
 ToolRegistry.addDeclarations([
   {
     name: "add",
@@ -635,15 +744,16 @@ urai js call weather.ts get_weather city="New York"
 
 ### "API URL not configured"
 
-Set the API URL:
+Set the API URL via an environment variable or add it to a profile in your config file (`.urai.toml` or `~/.config/urai/config.toml`).
+
 ```bash
 export URAI_API_URL="https://your-server.com"
-# or add to ~/.urai/config.toml
 ```
 
 ### "API key not configured"
 
-Set your API key:
+Set your API key via an environment variable or add it to a profile in your config file.
+
 ```bash
 export URAI_API_KEY="your-api-key"
 ```
