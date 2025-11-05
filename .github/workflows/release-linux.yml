@@ -118,8 +118,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            TARGETARCH=${{ matrix.arch }}
 
   create-release:
     needs: [build-linux, build-docker]
