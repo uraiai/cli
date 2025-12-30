@@ -12,7 +12,7 @@ on:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-20.04  # Use 20.04 for OpenSSL 1.1 compatibility
+    runs-on: ubuntu-24.04  # Use 20.04 for OpenSSL 1.1 compatibility
     permissions:
       contents: write
 
@@ -40,7 +40,7 @@ jobs:
       - name: Build Linux Binary
         run: |
           cd urai-backend/urai-cli
-          cargo build --release
+          cargo build --release --features urai
           strip ../target/release/urai
           cp ../target/release/urai ../../urai-linux-x86_64
         env:
@@ -95,7 +95,7 @@ jobs:
       - name: Build macOS Binary
         run: |
           cd urai-backend/urai-cli
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --features urai --target ${{ matrix.target }}
           strip ../target/${{ matrix.target }}/release/urai
           cp ../target/${{ matrix.target }}/release/urai ../../urai-macos-${{ matrix.arch }}
 

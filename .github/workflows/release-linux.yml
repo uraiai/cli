@@ -47,7 +47,7 @@ jobs:
       - name: Build Linux Binary
         run: |
           cd urai-backend/urai-cli
-          cargo build --release
+          cargo build --release --features urai
           strip ../target/release/urai
           cp ../target/release/urai ../../urai-linux-${{ matrix.arch }}
 
