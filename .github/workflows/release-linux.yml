@@ -139,7 +139,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.private_repo_tag }}
-          name: Release ${{ github.event.inputs.private_repo_tag }}
+          name: Docker Release ${{ github.event.inputs.private_repo_tag }}
           draft: false
           prerelease: false
           files: |
@@ -165,12 +165,15 @@ jobs:
             ```
 
             #### Docker (All Platforms including macOS)
+
+            To see all avaiable docker images visit https://github.com/uraiai/cli/pkgs/container/cli
+
             ```bash
             # Pull and run the image (automatically selects the right architecture)
-            docker pull ghcr.io/${{ github.repository }}:${{ github.event.inputs.private_repo_tag }}
+            docker pull ghcr.io/${{ github.repository }}:latest
 
             # Create a convenient alias
-            alias urai='docker run -it --rm -v $(pwd):/workspace -w /workspace ghcr.io/${{ github.repository }}:${{ github.event.inputs.private_repo_tag }} urai'
+            alias urai='docker run -it --rm -v $(pwd):/workspace -w /workspace ghcr.io/${{ github.repository }}:latest urai'
 
             # Use it like a native command
             urai --help

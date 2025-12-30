@@ -43,9 +43,6 @@ jobs:
           cargo build --release --features urai
           strip ../target/release/urai
           cp ../target/release/urai ../../urai-linux-x86_64
-        env:
-          # Link as much as possible statically, but V8 requires glibc
-          RUSTFLAGS: '-C target-feature=+crt-static'
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
@@ -58,10 +55,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-apple-darwin
-            os: macos-13  # Intel runner
+            os: macos-15  # Intel runner
             arch: x86_64
           - target: aarch64-apple-darwin
-            os: macos-14  # M1 runner
+            os: macos-15  # M1 runner
             arch: arm64
 
     runs-on: ${{ matrix.os }}
@@ -243,7 +240,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.private_repo_tag }}
-          name: Release ${{ github.event.inputs.private_repo_tag }}
+          name: Binary Release ${{ github.event.inputs.private_repo_tag }}
           draft: false
           prerelease: false
           files: |
