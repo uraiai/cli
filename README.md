@@ -47,22 +47,6 @@ The Docker image is based on Debian 13 and includes all necessary dependencies. 
 - **CI/CD pipelines**
 - **Consistent cross-platform execution**
 
-### Building from Source
-
-Build the CLI from the workspace root:
-
-```bash
-cargo build --release -p urai-cli
-```
-
-The binary will be available at `target/release/urai`.
-
-Optionally, install it globally:
-
-```bash
-cargo install --path urai-cli
-```
-
 ## Configuration
 
 The CLI supports configuration through multiple sources (in order of priority):
@@ -95,15 +79,9 @@ Create `.urai.toml` (local) or `~/.config/urai/config.toml` (global) with one or
 ```toml
 # Default profile, used if URAI_PROFILE is not set
 [profile.default]
-api_url = "https://api.urai.io"
+api_url = "https://voice.app.urai.dev"
 api_key = "key_for_default_profile"
 org_id = "org_default"
-
-# Staging profile, activated with `export URAI_PROFILE=staging`
-[profile.staging]
-api_url = "https://staging.api.urai.io"
-api_key = "key_for_staging_profile"
-org_id = "org_staging"
 ```
 
 The CLI will also read configuration from the old format (without profiles) and treat it as the `default` profile for backward compatibility.
