@@ -6,23 +6,13 @@ A unified command-line tool for building, testing, and deploying TypeScript tool
 
 ### Using Pre-built Binaries
 
-#### Linux (x86_64)
-```bash
-curl -L https://github.com/uraiai/cli/releases/latest/download/urai-linux-x86_64 -o urai
-chmod +x urai
-sudo mv urai /usr/local/bin/
-```
+Visit the [Releases](https://github.com/uraiai/cli/releases) section to download the binary for your
+architecture.
 
-#### Linux (ARM64/aarch64)
-```bash
-curl -L https://github.com/uraiai/cli/releases/latest/download/urai-linux-aarch64 -o urai
-chmod +x urai
-sudo mv urai /usr/local/bin/
-```
 
 #### Using Docker (All Platforms including macOS)
 
-For macOS users or anyone preferring containerized environments, use our Docker images hosted on GitHub Container Registry:
+If you prefer containerized environments, use our Docker images hosted on GitHub Container Registry:
 
 ```bash
 # Pull the image (automatically selects the right architecture)
@@ -42,7 +32,6 @@ urai js list-tools ./my-tools/tidycal.ts
 ```
 
 The Docker image is based on Debian 13 and includes all necessary dependencies. It's perfect for:
-- **macOS users** (Apple Silicon and Intel)
 - **Development environments**
 - **CI/CD pipelines**
 - **Consistent cross-platform execution**
@@ -67,7 +56,7 @@ You can override any configuration setting using environment variables.
 export URAI_PROFILE="staging"
 
 # Override settings for the selected profile
-export URAI_API_URL="https://your-urai-server.com"
+export URAI_API_URL="https://voice.app.urai.dev"
 export URAI_API_KEY="your-api-key-here"
 export URAI_ORG_ID="your-organization-id"
 ```
