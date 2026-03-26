@@ -43,7 +43,7 @@ The CLI supports configuration through multiple sources (in order of priority):
 1. **Command-line arguments** (highest priority)
 2. **Environment variables**
 3. **Local config file** (`.urai.toml` in current directory)
-4. **Global config file** (`~/.config/urai/config.toml`)
+4. **Global config file** (Linux - `~/.config/urai/config.toml` or Mac - `~/Library/Application Support/urai/config.toml`)
 
 Configuration can be organized into profiles. The active profile can be selected by setting the `URAI_PROFILE` environment variable. If not set, it defaults to `default`.
 
