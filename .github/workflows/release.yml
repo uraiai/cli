@@ -55,10 +55,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-apple-darwin
-            os: macos-15  # Intel runner
+            os: macos-26-intel  # Intel runner
             arch: x86_64
           - target: aarch64-apple-darwin
-            os: macos-15  # M1 runner
+            os: macos-26  # M1 runner
             arch: arm64
 
     runs-on: ${{ matrix.os }}
@@ -79,8 +79,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -92,9 +90,8 @@ jobs:
       - name: Build macOS Binary
         run: |
           cd urai-backend/urai-cli
-          cargo build --release --features urai --target ${{ matrix.target }}
-          strip ../target/${{ matrix.target }}/release/urai
-          cp ../target/${{ matrix.target }}/release/urai ../../urai-macos-${{ matrix.arch }}
+          cargo build --release --features urai
+          cp ../target/release/urai ../../urai-macos-${{ matrix.arch }}
 
       - name: Import Code Signing Certificate
         env:
