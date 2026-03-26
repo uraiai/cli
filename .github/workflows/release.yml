@@ -165,6 +165,7 @@ jobs:
           # Sign the binary
           codesign --force --sign "$IDENTITY" \
             --options runtime \
+            --entitlements entitlements.plist \
             --timestamp \
             urai-macos-${{ matrix.arch }}
 
